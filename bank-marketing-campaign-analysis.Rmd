@@ -1,0 +1,373 @@
+---
+title: "FinalExam-2802520665-Davina Oktaviani"
+author: "Davina Oktaviani"
+date: "2025-06-24"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    code_folding: hide
+    df_print: paged
+    fig_width: 5
+    fig_height: 7
+    dev: png
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+
+#Video Explanation
+Youtube: you can watch the video [here](https://youtu.be/vtJB7W2gdl8?si=zbrop3Vm3fwwnPl7)
+Google Drive: you can also watch the video [here](https://drive.google.com/file/d/1KORu7753zwBs9yCUrpGkorsRH0fUItZy/view?usp=drivesdk)
+
+
+
+```{r}
+library(tidyverse)
+library(plotly)
+library(dplyr)
+library(vcd)
+library(tidyr)
+```
+
+#Read data
+```{r}
+df = read.csv("data_B.csv")
+head(df)
+```
+
+
+
+## 1. [LO1, LO2 – 30 Points] Data Quality Assessment and Preprocessing {.tabset}
+
+### a. [LO1 - 10 Points] Identify data quality issues 
+
+#### Missing values
+
+```{r}
+df[df == "unknown"] = NA
+df[df == "NA"] = NA
+```
+
+```{r}
+numeric_cols = c("age", "duration", "campaign", "pdays", "previous")
+df[numeric_cols] = lapply(df[numeric_cols], function(x) as.numeric(as.character(x)))
+```
+
+
+```{r}
+df = df %>% drop_na(-pdays)
+summary(df)
+```
+
+#### Duplicate records
+```{r}
+df = df[!duplicated(df), ]
+nrow(df)
+```
+
+#### Inconsistent or unknown categories 
+```{r}
+factor_cols = c("job", "education", "marital", "default", 
+                 "housing", "loan", "contact", 
+                 "month", "day_of_week", "poutcome", "y")
+df[factor_cols] = lapply(df[factor_cols], as.factor)
+str(df[factor_cols])
+```
+
+
+#### Outliers or extreme values
+```{r}
+handle_outliers = function(df, col) {
+  Q1 = quantile(df[[col]], 0.25, na.rm = TRUE)
+  Q3 = quantile(df[[col]], 0.75, na.rm = TRUE)
+  IQR = Q3 - Q1
+  lower = Q1 - 1.5 * IQR
+  upper = Q3 + 1.5 * IQR
+  df = df[df[[col]] >= lower & df[[col]] <= upper, ]
+  return(df)
+}
+
+df = handle_outliers(df, "age")
+df = handle_outliers(df, "duration")
+df = handle_outliers(df, "campaign")
+df = handle_outliers(df, "previous")
+
+summary(df[c("age", "duration", "campaign", "previous")])
+```
+
+
+#### Noisy or irrelevant values
+```{r}
+df$pdays_cat = ifelse(df$pdays == 999, "never_contacted", "contacted_before")
+df$pdays_cat = as.factor(df$pdays_cat)
+table(df$pdays_cat)
+```
+
+
+### b. [LO1, LO2 - 10 Points] Handle the issues you identified
+
+#### Clean the data based on your earlier findings.
+The data has been cleaned based on the issues identified earlier, including missing values, duplicate records, inconsistent categories, outliers, and noisy values
+
+#### Explain your cleaning decisions (e.g., whether you imputed, removed, or recoded values). 
+- Missing values: Replaced "unknown" and "NA" strings with NA, then removed rows with missing values, excluding pdays to retain meaningful data.
+- Data types: Converted numeric columns from character to numeric for accurate analysis.
+- Duplicates: Removed duplicate rows to avoid bias.
+- Categories: Converted categorical columns to factors for consistent handling.
+- Outliers: Removed outliers using the IQR method on numeric columns, except pdays, since 999 is meaningful.
+- Noisy values: Kept pdays == 999 (not treated as missing), and created pdays_cat to label clients as "never_contacted" or "contacted_before".
+- Output: Cleaned dataset saved as clean_data.csv.
+
+
+#### Create a cleaned version of the dataset called clean_data. 
+```{r}
+clean_data = df
+write.csv(clean_data, "clean_data.csv", row.names = FALSE)
+head(clean_data)
+```
+
+
+### c. [LO1, LO2 -10 Points] Summary statistics and initial exploration 
+
+#### Calculate central tendency and variability for numerical columns
+```{r}
+summary(clean_data %>% select_if(is.numeric))
+```
+
+#### Create a summary table to explore one variable across categories (e.g., age by job type)
+
+##### age by job
+```{r}
+clean_data %>%
+  group_by(job) %>%
+  summarise(mean_age = mean(age, na.rm = TRUE),
+            median_age = median(age, na.rm = TRUE),
+            n = n()) %>%
+  arrange(desc(n))
+```
+
+
+##### duration by education
+```{r}
+clean_data %>%
+  group_by(education) %>%
+  summarise(
+    mean_duration = mean(duration, na.rm = TRUE),
+    median_duration = median(duration, na.rm = TRUE),
+    n = n()) %>%
+  arrange(desc(mean_duration))
+```
+
+##### campaign by marital
+```{r}
+clean_data %>%
+  group_by(marital) %>%
+  summarise(
+    mean_campaign = mean(campaign, na.rm = TRUE),
+    median_campaign = median(campaign, na.rm = TRUE),
+    n = n())
+```
+
+#####  pdays by contact
+```{r}
+clean_data %>%
+  group_by(contact) %>%
+  summarise(
+    mean_pdays = mean(pdays, na.rm = TRUE),
+    median_pdays = median(pdays, na.rm = TRUE),
+    n = n())
+```
+
+##### duration by month
+```{r}
+clean_data %>%
+  group_by(month) %>%
+  summarise(
+    mean_duration = mean(duration, na.rm = TRUE),
+    median_duration = median(duration, na.rm = TRUE),
+    n = n())
+```
+
+##### age by education
+```{r}
+clean_data %>%
+  group_by(education) %>%
+  summarise(
+    mean_age = mean(age, na.rm = TRUE),
+    median_age = median(age, na.rm = TRUE),
+    n = n())
+```
+
+
+
+## 2. [LO1, LO2, LO3 – 35 Points] Relationship Analysis {.tabset}
+
+### a. [LO1 - 10 Points] Explore variable relationships. Choose three variables that might influence the campaign outcome (y)
+
+I selected 3 variables that might influence the campaign outcome(y):
+1. age
+2. job
+3. duration
+
+#### Use correlation (for numeric), cross-tabulation (for categorical), or grouped summaries.
+
+```{r}
+clean_data$y_binary = ifelse(clean_data$y== "yes", 1, 0)
+```
+
+##### age vs y_binary (both are numeric)
+```{r}
+shapiro.test(sample(clean_data$age))
+shapiro.test(sample(clean_data$y_binary))
+```
+The result shows that the p-value for both variables is less than 0.05, indicating that the variables do not follow a normal distribution.
+
+```{r}
+cor.test(clean_data$age, clean_data$y_binary, method="kendall")
+```
+Since the p-value is also below 0.05, there is a statistically significant relationship between age and y_binary.
+
+
+##### job vs y (both are categorical)
+```{r}
+t1=table(clean_data$job, clean_data$y)
+t1
+```
+since the contingency table contains cells with values less than 5, we use Cramer's V test.
+
+```{r}
+library(vcd)
+assocstats(t1)
+```
+based on the likelihood ratio test, the p-value is less than 0.05, indicating a significant association between job and y.
+
+
+##### duration vs y_binary (numeric and categorical)
+```{r}
+model = lm(y_binary~duration, data = clean_data)
+summary(model)
+```
+the p-value is less than 0.05, meaning that the duration variable has a significant effect on y_binary.
+
+#### Discuss any patterns or trends you observe.
+- The Kendall correlation test between age and y_binary produced a p-value < 0.05, indicating a statistically significant relationship.
+- The association between job and y was found to be significant (p < 0.05).
+- The linear model between duration and y_binary showed a significant p-value, indicating that call duration affects the likelihood of subscription.
+
+
+### b. [LO2, LO3 -10 Points] Feature engineering. Create 3 new variables to enhance your analysis:
+
+#### age_group with levels: "<30", "30–50", ">50"
+```{r}
+clean_data = clean_data %>%
+  mutate(age_group = case_when(
+    age < 30 ~ "<30",
+    age >= 30 & age <= 50 ~ "30–50",
+    age > 50 ~ ">50"
+  ))
+
+table(clean_data$age_group)
+```
+
+#### recency_level based on pdays: "never", "recent", "old" 
+```{r}
+clean_data = clean_data %>%
+  mutate(recency_level = case_when(
+    pdays == 999 ~ "never",
+    pdays <= 5 ~ "recent",
+    pdays > 5 & pdays < 999 ~ "old",
+  ))
+
+table(clean_data$recency_level)
+```
+
+
+#### total_contact_score = campaign + previous
+```{r}
+clean_data = clean_data %>%
+  mutate(total_contact_score = campaign + previous)
+
+summary(clean_data$total_contact_score)
+```
+
+
+### c. [LO2, LO3 - 15 Points] Interactive visualizations of relationships. Create three interactive charts using Plotly: 
+
+#### A chart comparing two categorical variables 
+```{r}
+plot_ly(clean_data %>% count(job, y),
+        x = ~job, y = ~n, color = ~y, type = 'bar', text = ~n, textposition = 'auto') %>%
+  layout(title = "Campaign Outcome by Job",
+         xaxis = list(title = "Job"),
+         yaxis = list(title = "Number of Clients"),
+         barmode = "stack")
+```
+
+
+#### A chart comparing one numeric and one categorical  
+```{r}
+plot_ly(clean_data, x = ~y, y = ~age, type = 'box', color = ~y) %>%
+  layout(title = "Age Distribution by Campaign Outcome",
+         xaxis = list(title = "Campaign Outcome"),
+         yaxis = list(title = "Age"))
+```
+
+
+#### A multi-dimensional chart, e.g., faceted by month or grouped by education
+```{r}
+plot_ly(clean_data, x = ~education, y = ~total_contact_score, color = ~y, type = 'box') %>%
+  layout(title = "Total Contact Score by Education and Outcome",
+         xaxis = list(title = "Education"),
+         yaxis = list(title = "Total Contact Score"))
+```
+
+
+## 3. [LO1, LO3, LO4 – 25 Points] Insight Storytelling and Recommendations. You are now presenting your insights to a team of non-technical stakeholders. {.tabset}
+
+### a. [LO3 - 10 Points] Data storytelling through visual design. Choose 2 key findings and design an interactive chart with excellent visual storytelling. principles: Clean title, Informative labels, Highlight key differences using color or annotation
+
+#### age_group vs y
+```{r}
+plot_ly(clean_data %>% count(age_group, y),
+        x = ~age_group, y = ~n, color = ~y, type = 'bar', text = ~n, textposition = 'auto') %>%
+  layout(title = "Response Rate by Age Group",
+         xaxis = list(title = "Age Group"),
+         yaxis = list(title = "Number of Clients"),
+         barmode = "stack")
+```
+
+
+#### poutcome vs y
+```{r}
+plot_ly(clean_data %>% count(poutcome, y),
+        x = ~poutcome, y = ~n, color = ~y, type = 'bar', text = ~n, textposition = 'auto') %>%
+  layout(title = "Campaign Success Based on Previous Outcome",
+         xaxis = list(title = "Previous Outcome"),
+         yaxis = list(title = "Number of Clients"),
+         barmode = "stack")
+```
+
+
+### b. [LO1 - 10 Points] Interpret your findings. In 3–5 sentences, write a clear narrative explaining: Central trends (e.g., median age, contact duration), Any unusual values or segments (e.g., age group with lowest response), Possible correlations or causality risks
+
+- The average client age is 39 years, with a median of 37, mostly concentrated between ages 35–40.
+- Students are the youngest group, while retirees are the oldest. Other job types are mostly aged 35–45.
+- Clients with "illiterate" education have the highest average call duration, while those in professional courses have the lowest.
+- Married clients are contacted more frequently than single or divorced ones.
+- The highest average contact duration occurs in December.
+- The "admin" job category has the highest proportion of positive (yes) responses.
+- The median age of clients who responded "yes" is lower than those who responded "no", indicating that younger clients tend to be more responsive.
+- Clients with "basic.6y" education show the highest number of positive responses.
+- The age group 30–50 shows the highest proportion of "yes" responses.
+- High contact duration may be caused by the client's initial interest, suggesting the possibility of reverse causality.
+
+
+### c. [LO1, LO4 - 5 Points] Make business recommendations. Write two specific, actionable business recommendations based on your findings. 
+
+- Focus the campaign on clients aged 30–50 and those with admin jobs, as they show the highest "yes" response rates.
+- Prioritize clients with a history of successful previous campaigns (poutcome = success), as they are more likely to respond again.
+- Ensure that call durations last at least 2 minutes, as clients who respond "yes" generally have longer contact durations than those who do not.
